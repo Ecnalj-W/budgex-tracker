@@ -5,10 +5,10 @@ A personal mobile budget and expense tracker project built with Expo React Nativ
 ## Current Starter Features
 
 - Dashboard-style home screen
-- Add transaction form for income and expenses
+- Add passbook-style ledger entries for income and expenses
 - Balance, income, and expense summary cards
 - Budget overview by category
-- Recent transactions list with local sync status
+- Passbook-style ledger records with withdrawal, deposit, balance, and remarks
 - Offline-first transaction storage using AsyncStorage
 - NativeWind and Tailwind CSS utility-based styling
 - Supabase-ready sync layer for pending local transactions
@@ -70,7 +70,7 @@ Suggested table columns:
 
 ```sql
 id text primary key,
-title text not null,
+description text not null,
 category text not null,
 amount numeric not null,
 transaction_date timestamptz not null,
@@ -79,7 +79,8 @@ created_at timestamptz not null,
 updated_at timestamptz not null,
 sync_status text,
 last_synced_at timestamptz,
-remote_id text
+remote_id text,
+remarks text
 ```
 
 ## Project Goal

@@ -48,17 +48,19 @@ const createId = () =>
   `txn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const createTransaction = ({
-  title,
+  description,
   category,
   amount,
   type,
   date,
+  remarks,
 }: {
-  title: string;
+  description: string;
   category: string;
   amount: number;
   type: TransactionType;
   date?: string;
+  remarks?: string;
 }): Transaction => {
   const now = new Date();
   const transactionDate = date ? new Date(date) : now;
@@ -66,7 +68,7 @@ export const createTransaction = ({
 
   return {
     id: createId(),
-    title: title.trim(),
+    description: description.trim(),
     category,
     amount,
     type,
@@ -76,6 +78,7 @@ export const createTransaction = ({
     syncStatus: 'pending',
     lastSyncedAt: null,
     remoteId: null,
+    remarks: remarks?.trim() || null,
   };
 };
 
@@ -88,38 +91,43 @@ const createSeedDate = (daysAgo: number) => {
 export const createSeedTransactions = () =>
   [
     createTransaction({
-      title: 'Monthly Salary',
+      description: 'Monthly Salary',
       category: 'Salary',
       amount: 42000,
       type: 'income',
       date: createSeedDate(2),
+      remarks: 'Payroll credited',
     }),
     createTransaction({
-      title: 'Groceries',
+      description: 'Groceries',
       category: 'Food',
       amount: 2450,
       type: 'expense',
       date: createSeedDate(1),
+      remarks: 'Weekend restock',
     }),
     createTransaction({
-      title: 'Internet Bill',
+      description: 'Internet Bill',
       category: 'Utilities',
       amount: 1699,
       type: 'expense',
       date: createSeedDate(1),
+      remarks: 'Monthly service',
     }),
     createTransaction({
-      title: 'Fuel',
+      description: 'Fuel',
       category: 'Transport',
       amount: 1200,
       type: 'expense',
       date: createSeedDate(0),
+      remarks: 'Field travel',
     }),
     createTransaction({
-      title: 'Freelance Task',
+      description: 'Freelance Task',
       category: 'Side Income',
       amount: 3500,
       type: 'income',
       date: createSeedDate(0),
+      remarks: 'Client payout',
     }),
   ].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());

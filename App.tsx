@@ -55,13 +55,21 @@ const formatTransactionDate = (isoDate: string) =>
     day: '2-digit',
   }).format(new Date(isoDate));
 
+const formatLedgerDate = (isoDate: string) =>
+  new Intl.DateTimeFormat('en-PH', {
+    month: '2-digit',
+    day: '2-digit',
+    year: '2-digit',
+  }).format(new Date(isoDate));
+
 export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [transactionType, setTransactionType] =
     useState<TransactionType>('expense');
   const [category, setCategory] = useState(getCategoriesByType('expense')[0]);
+  const [remarks, setRemarks] = useState('');
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState(
@@ -142,12 +150,42 @@ export default function App() {
     [categoryTotals],
   );
 
+  const ledgerEntries = useMemo(() => {
+    const oldestFirst = [...transactions].sort(
+      (left, right) => new Date(left.date).getTime() - new Date(right.date).getTime(),
+    );
+
+    let runningBalance = 0;
+
+    return oldestFirst.map((transaction) => {
+      const deposit = transaction.type === 'income' ? transaction.amount : null;
+      const withdrawal =
+        transaction.type === 'expense' ? transaction.amount : null;
+
+      runningBalance += deposit ?? 0;
+      runningBalance -= withdrawal ?? 0;
+
+      return {
+        ...transaction,
+        deposit,
+        withdrawal,
+        balance: runningBalance,
+        ledgerRemarks:
+          transaction.remarks ??
+          (transaction.syncStatus === 'synced' ? 'Synced' : 'Pending sync'),
+      };
+    });
+  }, [transactions]);
+
   const handleAddTransaction = async () => {
-    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
     const parsedAmount = Number(amount);
 
-    if (!trimmedTitle) {
-      Alert.alert('Missing title', 'Add a short title for this transaction.');
+    if (!trimmedDescription) {
+      Alert.alert(
+        'Missing description',
+        'Add a short description for this ledger entry.',
+      );
       return;
     }
 
@@ -157,18 +195,20 @@ export default function App() {
     }
 
     const nextTransaction = createTransaction({
-      title: trimmedTitle,
+      description: trimmedDescription,
       category,
       amount: parsedAmount,
       type: transactionType,
+      remarks,
     });
 
     const nextTransactions = [nextTransaction, ...transactions];
 
     await saveTransactions(nextTransactions);
     setTransactions(nextTransactions);
-    setTitle('');
+    setDescription('');
     setAmount('');
+    setRemarks('');
     setSyncMessage(
       'Transaction saved locally. It is available offline and marked as pending sync.',
     );
@@ -236,7 +276,7 @@ export default function App() {
                 Add Transaction
               </Text>
               <Text className="text-[13px] text-slate-500">
-                Stored on-device first, then ready for sync.
+                Passbook-style entry stored on-device first, then ready for sync.
               </Text>
             </View>
             <Text className="rounded-full bg-stone-200 px-3 py-1 text-[12px] font-semibold text-slate-600">
@@ -271,10 +311,10 @@ export default function App() {
           <View className="gap-3">
             <TextInput
               className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
-              placeholder="Transaction title"
+              placeholder="Description"
               placeholderTextColor="#78716c"
-              value={title}
-              onChangeText={setTitle}
+              value={description}
+              onChangeText={setDescription}
             />
             <TextInput
               className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
@@ -283,6 +323,13 @@ export default function App() {
               keyboardType="decimal-pad"
               value={amount}
               onChangeText={setAmount}
+            />
+            <TextInput
+              className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
+              placeholder="Remarks"
+              placeholderTextColor="#78716c"
+              value={remarks}
+              onChangeText={setRemarks}
             />
           </View>
 
@@ -410,52 +457,66 @@ export default function App() {
         <View className="gap-4 rounded-3xl bg-stone-50 p-5">
           <View className="flex-row items-center justify-between">
             <Text className="text-xl font-extrabold text-slate-900">
-              Recent Transactions
+              Ledger Records
             </Text>
             <Text className="text-[13px] font-semibold text-slate-500">
-              This Week
+              Passbook View
             </Text>
           </View>
+          <View className="rounded-2xl border border-stone-200 bg-white">
+            <View className="flex-row border-b border-stone-200 bg-stone-100 px-3 py-2">
+              <Text className="w-[52px] text-[11px] font-bold uppercase text-slate-500">
+                Date
+              </Text>
+              <Text className="flex-1 text-[11px] font-bold uppercase text-slate-500">
+                Description
+              </Text>
+              <Text className="w-[78px] text-right text-[11px] font-bold uppercase text-slate-500">
+                Withdraw
+              </Text>
+              <Text className="w-[78px] text-right text-[11px] font-bold uppercase text-slate-500">
+                Deposit
+              </Text>
+              <Text className="w-[78px] text-right text-[11px] font-bold uppercase text-slate-500">
+                Balance
+              </Text>
+            </View>
 
-          {transactions.map((transaction) => {
-            const isIncome = transaction.type === 'income';
-
-            return (
+            {ledgerEntries.map((entry) => (
               <View
-                key={transaction.id}
-                className="flex-row items-center justify-between border-b border-stone-200 pb-3.5"
+                key={entry.id}
+                className="border-b border-stone-200 px-3 py-3 last:border-b-0"
               >
-                <View className="flex-1 gap-1 pr-3">
-                  <Text className="text-base font-bold text-slate-800">
-                    {transaction.title}
+                <View className="flex-row items-start">
+                  <Text className="w-[52px] text-[12px] font-semibold text-slate-600">
+                    {formatLedgerDate(entry.date)}
                   </Text>
-                  <Text className="text-[13px] text-slate-500">
-                    {transaction.category} • {formatTransactionDate(transaction.date)}
+                  <View className="flex-1 pr-2">
+                    <Text className="text-[13px] font-bold text-slate-800">
+                      {entry.description}
+                    </Text>
+                    <Text className="text-[11px] text-slate-500">
+                      {entry.category}
+                    </Text>
+                  </View>
+                  <Text className="w-[78px] text-right text-[12px] font-semibold text-orange-700">
+                    {entry.withdrawal
+                      ? currencyFormatter.format(entry.withdrawal)
+                      : '-'}
                   </Text>
-                </View>
-
-                <View className="items-end gap-1">
-                  <Text
-                    className={`text-[15px] font-extrabold ${
-                      isIncome ? 'text-emerald-700' : 'text-orange-700'
-                    }`}
-                  >
-                    {isIncome ? '+' : '-'}
-                    {currencyFormatter.format(transaction.amount)}
+                  <Text className="w-[78px] text-right text-[12px] font-semibold text-emerald-700">
+                    {entry.deposit ? currencyFormatter.format(entry.deposit) : '-'}
                   </Text>
-                  <Text
-                    className={`text-[12px] font-semibold ${
-                      transaction.syncStatus === 'synced'
-                        ? 'text-emerald-700'
-                        : 'text-amber-700'
-                    }`}
-                  >
-                    {transaction.syncStatus === 'synced' ? 'Synced' : 'Pending'}
+                  <Text className="w-[78px] text-right text-[12px] font-bold text-slate-800">
+                    {currencyFormatter.format(entry.balance)}
                   </Text>
                 </View>
+                <Text className="mt-2 text-[11px] text-slate-500">
+                  Remarks: {entry.ledgerRemarks}
+                </Text>
               </View>
-            );
-          })}
+            ))}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

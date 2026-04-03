@@ -34,7 +34,7 @@ export const syncPendingTransactions = async (transactions: Transaction[]) => {
   const { error } = await supabase.from(supabaseConfig.transactionsTable).upsert(
     pendingTransactions.map((transaction) => ({
       id: transaction.id,
-      title: transaction.title,
+      description: transaction.description,
       category: transaction.category,
       amount: transaction.amount,
       transaction_date: transaction.date,
@@ -44,6 +44,7 @@ export const syncPendingTransactions = async (transactions: Transaction[]) => {
       sync_status: transaction.syncStatus,
       last_synced_at: transaction.lastSyncedAt,
       remote_id: transaction.remoteId,
+      remarks: transaction.remarks,
     })),
     { onConflict: 'id' },
   );

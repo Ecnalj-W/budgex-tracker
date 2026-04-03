@@ -4,7 +4,7 @@ export type SyncStatus = 'pending' | 'synced';
 
 export type Transaction = {
   id: string;
-  title: string;
+  description: string;
   category: string;
   amount: number;
   date: string;
@@ -14,4 +14,5 @@ export type Transaction = {
   syncStatus: SyncStatus;
   lastSyncedAt?: string | null;
   remoteId?: string | null;
+  remarks?: string | null;
 };
