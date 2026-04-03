@@ -5,6 +5,7 @@ A personal mobile budget and expense tracker project built with Expo React Nativ
 ## Current Starter Features
 
 - Bottom-tab navigation with separate Home and Records pages
+- General tab with hamburger-menu style access for account and app settings
 - Homepage for consolidated summaries, sync status, and overall ledger records
 - Daily Records page for passbook-style ledger entries by date
 - Balance, income, and expense summary cards
@@ -13,6 +14,8 @@ A personal mobile budget and expense tracker project built with Expo React Nativ
 - Offline-first transaction storage using AsyncStorage
 - NativeWind and Tailwind CSS utility-based styling
 - Supabase-ready sync layer for pending local transactions
+- Local account profile and settings storage ready for multi-user expansion
+- Supabase email auth and Google OAuth code paths are wired into the General tab
 
 ## Tech Stack
 
@@ -49,7 +52,7 @@ npm start
 - Add filters by month and category
 - Create charts for monthly spending
 - Add budgets that warn when spending goes over the limit
-- Configure Supabase credentials and create the transactions table
+- Configure Supabase credentials, auth providers, and database tables
 
 ## Offline And Online Storage Plan
 
@@ -61,13 +64,50 @@ npm start
 - Manual sync is already wired into the app
 - Supabase can be enabled later by filling in [src/config/supabase.ts](J:\GITHUB\budgex-tracker\src\config\supabase.ts)
 
+## Account And Settings
+
+- The `General` tab is the app’s menu/settings area
+- Email login, registration, and Google sign-in buttons are now wired to Supabase auth code paths
+- App sync settings are currently stored locally per device
+- Sign out is available from the current account section
+
+## Environment Variables
+
+Create a local `.env` file using [.env.example](J:\GITHUB\budgex-tracker\.env.example):
+
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
 ## Supabase Notes
 
-Update [src/config/supabase.ts](J:\GITHUB\budgex-tracker\src\config\supabase.ts) with your:
+The app now reads Supabase auth credentials from environment variables through [src/config/supabase.ts](J:\GITHUB\budgex-tracker\src\config\supabase.ts).
 
-- Supabase project URL
-- Supabase anon key
-- table name if you do not want to use `transactions`
+Before testing auth, configure:
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- Google provider in Supabase Auth
+- redirect URI for the custom app scheme `budgex://auth/callback`
+- the `profiles` and `transactions` tables
+
+Relevant auth and client files:
+
+- [src/lib/supabase-client.ts](J:\GITHUB\budgex-tracker\src\lib\supabase-client.ts)
+- [src/lib/auth.ts](J:\GITHUB\budgex-tracker\src\lib\auth.ts)
+- [src/config/supabase.ts](J:\GITHUB\budgex-tracker\src\config\supabase.ts)
+
+Suggested `profiles` table columns:
+
+```sql
+id uuid primary key,
+email text unique not null,
+display_name text,
+provider text,
+created_at timestamptz default now(),
+updated_at timestamptz default now()
+```
 
 Suggested table columns:
 

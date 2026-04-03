@@ -2,6 +2,7 @@
   "expo": {
     "name": "budgex-tracker",
     "slug": "budgex-tracker",
+    "scheme": "budgex",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -26,6 +27,9 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }

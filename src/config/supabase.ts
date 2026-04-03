@@ -1,5 +1,7 @@
 export const supabaseConfig = {
-  url: '',
-  anonKey: '',
+  url: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
+  anonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+  redirectScheme: 'budgex',
+  profilesTable: 'profiles',
   transactionsTable: 'transactions',
 };

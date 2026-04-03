@@ -3,6 +3,7 @@ import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import { LedgerTable } from '../components/ledger-table';
 import { buildLedgerEntries, currencyFormatter } from '../lib/ledger';
 import { isSupabaseConfigured } from '../lib/supabase-sync';
+import type { AppTheme } from '../lib/theme';
 import type { Transaction } from '../types/transactions';
 
 const budgetCategoryTargets = [
@@ -17,6 +18,7 @@ type HomeScreenProps = {
   isSyncing: boolean;
   syncMessage: string;
   onManualSync: () => void;
+  theme: AppTheme;
 };
 
 export function HomeScreen({
@@ -25,6 +27,7 @@ export function HomeScreen({
   isSyncing,
   syncMessage,
   onManualSync,
+  theme,
 }: HomeScreenProps) {
   const totalIncome = transactions
     .filter((transaction) => transaction.type === 'income')
@@ -56,16 +59,16 @@ export function HomeScreen({
   const ledgerEntries = buildLedgerEntries(transactions);
 
   return (
-    <SafeAreaView className="flex-1 bg-stone-100">
+    <SafeAreaView className={`flex-1 ${theme.screenBg}`}>
       <ScrollView contentContainerClassName="gap-[18px] px-5 py-4 pb-8">
-        <View className="gap-[18px] rounded-[28px] bg-emerald-950 p-6 shadow-sm shadow-black/20">
+        <View className={`gap-[18px] rounded-[28px] p-6 shadow-sm shadow-black/20 ${theme.heroBg}`}>
           <Text className="text-[13px] font-bold uppercase tracking-[1.2px] text-emerald-100">
             Budgex Tracker
           </Text>
-          <Text className="text-3xl font-extrabold leading-9 text-white">
+          <Text className={`text-3xl font-extrabold leading-9 ${theme.heroText}`}>
             Your money, easier to read.
           </Text>
-          <Text className="text-[15px] leading-[22px] text-emerald-50/85">
+          <Text className={`text-[15px] leading-[22px] ${theme.heroMuted}`}>
             Homepage view for full summaries, consolidated records, and sync status.
           </Text>
 
@@ -92,24 +95,24 @@ export function HomeScreen({
           </View>
         </View>
 
-        <View className="gap-4 rounded-3xl bg-stone-50 p-5">
+        <View className={`gap-4 rounded-3xl p-5 ${theme.cardBg}`}>
           <View className="flex-row items-center justify-between">
             <View className="gap-1">
-              <Text className="text-xl font-extrabold text-slate-900">
+              <Text className={`text-xl font-extrabold ${theme.textPrimary}`}>
                 Sync Status
               </Text>
-              <Text className="text-[13px] text-slate-500">
+              <Text className={`text-[13px] ${theme.textMuted}`}>
                 {isSupabaseConfigured()
                   ? 'Supabase connection is configured.'
                   : 'Supabase is not configured yet.'}
               </Text>
             </View>
-            <Text className="rounded-full bg-stone-200 px-3 py-1 text-[12px] font-semibold text-slate-600">
+            <Text className={`rounded-full px-3 py-1 text-[12px] font-semibold ${theme.chipBg} ${theme.chipText}`}>
               {pendingSyncCount} pending
             </Text>
           </View>
 
-          <Text className="text-sm leading-6 text-slate-600">{syncMessage}</Text>
+          <Text className={`text-sm leading-6 ${theme.textMuted}`}>{syncMessage}</Text>
 
           <Pressable
             className={`rounded-2xl px-4 py-4 ${
@@ -124,12 +127,12 @@ export function HomeScreen({
           </Pressable>
         </View>
 
-        <View className="gap-4 rounded-3xl bg-stone-50 p-5">
+        <View className={`gap-4 rounded-3xl p-5 ${theme.cardBg}`}>
           <View className="flex-row items-center justify-between">
-            <Text className="text-xl font-extrabold text-slate-900">
+            <Text className={`text-xl font-extrabold ${theme.textPrimary}`}>
               Budget Overview
             </Text>
-            <Text className="text-[13px] font-semibold text-slate-500">
+            <Text className={`text-[13px] font-semibold ${theme.textMuted}`}>
               Consolidated
             </Text>
           </View>
@@ -141,10 +144,10 @@ export function HomeScreen({
               <View key={category.name} className="gap-2.5">
                 <View className="flex-row items-center justify-between">
                   <View>
-                    <Text className="text-base font-bold text-slate-800">
+                    <Text className={`text-base font-bold ${theme.textSecondary}`}>
                       {category.name}
                     </Text>
-                    <Text className="mt-0.5 text-[13px] text-slate-500">
+                    <Text className={`mt-0.5 text-[13px] ${theme.textMuted}`}>
                       {currencyFormatter.format(category.spent)} of{' '}
                       {currencyFormatter.format(category.limit)}
                     </Text>
@@ -154,7 +157,7 @@ export function HomeScreen({
                   </Text>
                 </View>
 
-                <View className="h-2.5 overflow-hidden rounded-full bg-stone-200">
+                <View className={`h-2.5 overflow-hidden rounded-full ${theme.chipBg}`}>
                   <View
                     className="h-full rounded-full"
                     style={{
@@ -168,18 +171,19 @@ export function HomeScreen({
           })}
         </View>
 
-        <View className="gap-4 rounded-3xl bg-stone-50 p-5">
+        <View className={`gap-4 rounded-3xl p-5 ${theme.cardBg}`}>
           <View className="flex-row items-center justify-between">
-            <Text className="text-xl font-extrabold text-slate-900">
+            <Text className={`text-xl font-extrabold ${theme.textPrimary}`}>
               Consolidated Ledger
             </Text>
-            <Text className="text-[13px] font-semibold text-slate-500">
+            <Text className={`text-[13px] font-semibold ${theme.textMuted}`}>
               All Records
             </Text>
           </View>
           <LedgerTable
             entries={ledgerEntries}
             emptyMessage="No saved records yet. Add your first entry from the Records page."
+            theme={theme}
           />
         </View>
       </ScrollView>

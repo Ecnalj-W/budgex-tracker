@@ -19,6 +19,7 @@ import {
   getTodayDateKey,
 } from '../lib/date-utils';
 import { buildLedgerEntries, currencyFormatter } from '../lib/ledger';
+import type { AppTheme } from '../lib/theme';
 import type { Transaction, TransactionType } from '../types/transactions';
 
 type RecordsScreenProps = {
@@ -31,11 +32,13 @@ type RecordsScreenProps = {
     type: TransactionType;
     dateKey: string;
   }) => Promise<boolean>;
+  theme: AppTheme;
 };
 
 export function RecordsScreen({
   transactions,
   onAddTransaction,
+  theme,
 }: RecordsScreenProps) {
   const [selectedDateKey, setSelectedDateKey] = useState(getTodayDateKey());
   const [description, setDescription] = useState('');
@@ -113,17 +116,17 @@ export function RecordsScreen({
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-stone-100">
+    <SafeAreaView className={`flex-1 ${theme.screenBg}`}>
       <ScrollView contentContainerClassName="gap-[18px] px-5 py-4 pb-8">
-        <View className="gap-4 rounded-[28px] bg-stone-50 p-5">
+        <View className={`gap-4 rounded-[28px] p-5 ${theme.cardBg}`}>
           <View className="gap-1">
-            <Text className="text-[13px] font-bold uppercase tracking-[1.2px] text-slate-500">
+            <Text className={`text-[13px] font-bold uppercase tracking-[1.2px] ${theme.textMuted}`}>
               Daily Records
             </Text>
-            <Text className="text-3xl font-extrabold text-slate-900">
+            <Text className={`text-3xl font-extrabold ${theme.textPrimary}`}>
               {formatDisplayDate(selectedDateKey)}
             </Text>
-            <Text className="text-[14px] leading-6 text-slate-500">
+            <Text className={`text-[14px] leading-6 ${theme.textMuted}`}>
               Each day stands on its own here. When a new day starts, this page
               returns to that day’s view and its daily totals begin from zero until
               you add entries.
@@ -140,13 +143,13 @@ export function RecordsScreen({
                   <Pressable
                     key={dateKey}
                     className={`rounded-full px-4 py-2 ${
-                      selected ? 'bg-emerald-950' : 'bg-stone-200'
+                      selected ? 'bg-emerald-950' : theme.chipBg
                     }`}
                     onPress={() => setSelectedDateKey(dateKey)}
                   >
                     <Text
                       className={`text-sm font-semibold ${
-                        selected ? 'text-white' : 'text-slate-700'
+                        selected ? 'text-white' : theme.chipText
                       }`}
                     >
                       {isToday ? 'Today' : formatDisplayDate(dateKey)}
@@ -185,19 +188,19 @@ export function RecordsScreen({
           </View>
         </View>
 
-        <View className="gap-4 rounded-3xl bg-stone-50 p-5">
+        <View className={`gap-4 rounded-3xl p-5 ${theme.cardBg}`}>
           <View className="flex-row items-center justify-between">
             <View className="gap-1">
-              <Text className="text-xl font-extrabold text-slate-900">
+              <Text className={`text-xl font-extrabold ${theme.textPrimary}`}>
                 Add Daily Entry
               </Text>
-              <Text className="text-[13px] text-slate-500">
+              <Text className={`text-[13px] ${theme.textMuted}`}>
                 {isTodayView
                   ? 'This entry will be saved under today’s records.'
                   : 'Viewing an older day. Switch to Today to add a new entry.'}
               </Text>
             </View>
-            <Text className="rounded-full bg-stone-200 px-3 py-1 text-[12px] font-semibold text-slate-600">
+            <Text className={`rounded-full px-3 py-1 text-[12px] font-semibold ${theme.chipBg} ${theme.chipText}`}>
               {isTodayView ? 'Today' : 'Read only'}
             </Text>
           </View>
@@ -210,13 +213,13 @@ export function RecordsScreen({
                 <Pressable
                   key={type}
                   className={`flex-1 rounded-2xl px-4 py-3 ${
-                    selected ? 'bg-emerald-950' : 'bg-stone-200'
+                    selected ? 'bg-emerald-950' : theme.chipBg
                   }`}
                   onPress={() => setTransactionType(type)}
                 >
                   <Text
                     className={`text-center text-sm font-bold capitalize ${
-                      selected ? 'text-white' : 'text-slate-600'
+                      selected ? 'text-white' : theme.chipText
                     }`}
                   >
                     {type}
@@ -228,7 +231,7 @@ export function RecordsScreen({
 
           <View className="gap-3">
             <TextInput
-              className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
+              className={`rounded-2xl border px-4 py-3 text-base ${theme.inputBorder} ${theme.inputBg} ${theme.textPrimary}`}
               placeholder="Description"
               placeholderTextColor="#78716c"
               value={description}
@@ -236,7 +239,7 @@ export function RecordsScreen({
               onChangeText={setDescription}
             />
             <TextInput
-              className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
+              className={`rounded-2xl border px-4 py-3 text-base ${theme.inputBorder} ${theme.inputBg} ${theme.textPrimary}`}
               placeholder="Amount"
               placeholderTextColor="#78716c"
               keyboardType="decimal-pad"
@@ -245,7 +248,7 @@ export function RecordsScreen({
               onChangeText={setAmount}
             />
             <TextInput
-              className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
+              className={`rounded-2xl border px-4 py-3 text-base ${theme.inputBorder} ${theme.inputBg} ${theme.textPrimary}`}
               placeholder="Remarks"
               placeholderTextColor="#78716c"
               value={remarks}
@@ -255,7 +258,7 @@ export function RecordsScreen({
           </View>
 
           <View className="gap-3">
-            <Text className="text-sm font-semibold text-slate-600">Category</Text>
+            <Text className={`text-sm font-semibold ${theme.chipText}`}>Category</Text>
             <View className="flex-row flex-wrap gap-2">
               {getCategoriesByType(transactionType).map((item) => {
                 const selected = item === category;
@@ -264,13 +267,13 @@ export function RecordsScreen({
                   <Pressable
                     key={item}
                     className={`rounded-full px-4 py-2 ${
-                      selected ? 'bg-orange-700' : 'bg-stone-200'
+                      selected ? 'bg-orange-700' : theme.chipBg
                     }`}
                     onPress={() => setCategory(item)}
                   >
                     <Text
                       className={`text-sm font-semibold ${
-                        selected ? 'text-white' : 'text-slate-700'
+                        selected ? 'text-white' : theme.chipText
                       }`}
                     >
                       {item}
@@ -296,18 +299,19 @@ export function RecordsScreen({
           </Pressable>
         </View>
 
-        <View className="gap-4 rounded-3xl bg-stone-50 p-5">
+        <View className={`gap-4 rounded-3xl p-5 ${theme.cardBg}`}>
           <View className="flex-row items-center justify-between">
-            <Text className="text-xl font-extrabold text-slate-900">
+            <Text className={`text-xl font-extrabold ${theme.textPrimary}`}>
               Daily Ledger
             </Text>
-            <Text className="text-[13px] font-semibold text-slate-500">
+            <Text className={`text-[13px] font-semibold ${theme.textMuted}`}>
               {isTodayView ? 'Today' : formatDisplayDate(selectedDateKey)}
             </Text>
           </View>
           <LedgerTable
             entries={dailyEntries}
             emptyMessage="No records for this day yet. When a new day begins, this view starts fresh at zero until new entries are added."
+            theme={theme}
           />
         </View>
       </ScrollView>
