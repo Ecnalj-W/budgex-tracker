@@ -4,8 +4,9 @@ A personal mobile budget and expense tracker project built with Expo React Nativ
 
 ## Current Starter Features
 
-- Dashboard-style home screen
-- Add passbook-style ledger entries for income and expenses
+- Bottom-tab navigation with separate Home and Records pages
+- Homepage for consolidated summaries, sync status, and overall ledger records
+- Daily Records page for passbook-style ledger entries by date
 - Balance, income, and expense summary cards
 - Budget overview by category
 - Passbook-style ledger records with withdrawal, deposit, balance, and remarks
@@ -54,6 +55,8 @@ npm start
 
 - Transactions are saved locally on the phone first
 - Local storage is pruned to roughly the latest 30 days of transactions
+- The Records page defaults to today and resets to that day when the app becomes active again
+- Daily totals stay scoped to the currently selected date on the Records page
 - New items are marked as `pending` until they are synced online
 - Manual sync is already wired into the app
 - Supabase can be enabled later by filling in [src/config/supabase.ts](J:\GITHUB\budgex-tracker\src\config\supabase.ts)
