@@ -1,61 +1,29 @@
 import './global.css';
 
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, ScrollView, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
-type TransactionType = 'income' | 'expense';
-
-type Transaction = {
-  id: string;
-  title: string;
-  category: string;
-  amount: number;
-  date: string;
-  type: TransactionType;
-};
-
-const transactions: Transaction[] = [
-  {
-    id: '1',
-    title: 'Monthly Salary',
-    category: 'Income',
-    amount: 42000,
-    date: 'Apr 01',
-    type: 'income',
-  },
-  {
-    id: '2',
-    title: 'Groceries',
-    category: 'Food',
-    amount: 2450,
-    date: 'Apr 02',
-    type: 'expense',
-  },
-  {
-    id: '3',
-    title: 'Internet Bill',
-    category: 'Utilities',
-    amount: 1699,
-    date: 'Apr 02',
-    type: 'expense',
-  },
-  {
-    id: '4',
-    title: 'Fuel',
-    category: 'Transport',
-    amount: 1200,
-    date: 'Apr 03',
-    type: 'expense',
-  },
-  {
-    id: '5',
-    title: 'Freelance Task',
-    category: 'Side Income',
-    amount: 3500,
-    date: 'Apr 03',
-    type: 'income',
-  },
-];
+import { getCategoriesByType } from './src/constants/categories';
+import {
+  createSeedTransactions,
+  createTransaction,
+  loadTransactions,
+  saveTransactions,
+} from './src/lib/transaction-storage';
+import {
+  isSupabaseConfigured,
+  syncPendingTransactions,
+} from './src/lib/supabase-sync';
+import type { Transaction, TransactionType } from './src/types/transactions';
 
 const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -63,46 +31,164 @@ const currencyFormatter = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 });
 
-const totalIncome = transactions
-  .filter((transaction) => transaction.type === 'income')
-  .reduce((sum, transaction) => sum + transaction.amount, 0);
-
-const totalExpenses = transactions
-  .filter((transaction) => transaction.type === 'expense')
-  .reduce((sum, transaction) => sum + transaction.amount, 0);
-
-const balance = totalIncome - totalExpenses;
-
-const categoryTotals = transactions
-  .filter((transaction) => transaction.type === 'expense')
-  .reduce<Record<string, number>>((accumulator, transaction) => {
-    const currentTotal = accumulator[transaction.category] ?? 0;
-    accumulator[transaction.category] = currentTotal + transaction.amount;
-    return accumulator;
-  }, {});
-
-const budgetCategories = [
+const budgetCategoryTargets = [
   {
     name: 'Food',
-    spent: categoryTotals.Food ?? 0,
     limit: 5000,
     color: '#e76f51',
   },
   {
     name: 'Utilities',
-    spent: categoryTotals.Utilities ?? 0,
     limit: 3000,
     color: '#f4a261',
   },
   {
     name: 'Transport',
-    spent: categoryTotals.Transport ?? 0,
     limit: 2500,
     color: '#2a9d8f',
   },
 ];
 
+const formatTransactionDate = (isoDate: string) =>
+  new Intl.DateTimeFormat('en-PH', {
+    month: 'short',
+    day: '2-digit',
+  }).format(new Date(isoDate));
+
 export default function App() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [title, setTitle] = useState('');
+  const [amount, setAmount] = useState('');
+  const [transactionType, setTransactionType] =
+    useState<TransactionType>('expense');
+  const [category, setCategory] = useState(getCategoriesByType('expense')[0]);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(
+    'Offline mode is active. Pending transactions will stay on this device until you sync them.',
+  );
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      const storedTransactions = await loadTransactions();
+
+      if (storedTransactions.length > 0) {
+        setTransactions(storedTransactions);
+        setIsBootstrapping(false);
+        return;
+      }
+
+      const seedTransactions = createSeedTransactions();
+      await saveTransactions(seedTransactions);
+      setTransactions(seedTransactions);
+      setIsBootstrapping(false);
+    };
+
+    bootstrap().catch(() => {
+      setSyncMessage(
+        'We could not load local storage on startup. Try restarting the app.',
+      );
+      setIsBootstrapping(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    setCategory(getCategoriesByType(transactionType)[0]);
+  }, [transactionType]);
+
+  const totalIncome = useMemo(
+    () =>
+      transactions
+        .filter((transaction) => transaction.type === 'income')
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
+    [transactions],
+  );
+
+  const totalExpenses = useMemo(
+    () =>
+      transactions
+        .filter((transaction) => transaction.type === 'expense')
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
+    [transactions],
+  );
+
+  const balance = totalIncome - totalExpenses;
+
+  const pendingSyncCount = useMemo(
+    () =>
+      transactions.filter((transaction) => transaction.syncStatus === 'pending')
+        .length,
+    [transactions],
+  );
+
+  const categoryTotals = useMemo(
+    () =>
+      transactions
+        .filter((transaction) => transaction.type === 'expense')
+        .reduce<Record<string, number>>((accumulator, transaction) => {
+          const currentTotal = accumulator[transaction.category] ?? 0;
+          accumulator[transaction.category] = currentTotal + transaction.amount;
+          return accumulator;
+        }, {}),
+    [transactions],
+  );
+
+  const budgetCategories = useMemo(
+    () =>
+      budgetCategoryTargets.map((categoryTarget) => ({
+        ...categoryTarget,
+        spent: categoryTotals[categoryTarget.name] ?? 0,
+      })),
+    [categoryTotals],
+  );
+
+  const handleAddTransaction = async () => {
+    const trimmedTitle = title.trim();
+    const parsedAmount = Number(amount);
+
+    if (!trimmedTitle) {
+      Alert.alert('Missing title', 'Add a short title for this transaction.');
+      return;
+    }
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Invalid amount', 'Enter a valid amount greater than zero.');
+      return;
+    }
+
+    const nextTransaction = createTransaction({
+      title: trimmedTitle,
+      category,
+      amount: parsedAmount,
+      type: transactionType,
+    });
+
+    const nextTransactions = [nextTransaction, ...transactions];
+
+    await saveTransactions(nextTransactions);
+    setTransactions(nextTransactions);
+    setTitle('');
+    setAmount('');
+    setSyncMessage(
+      'Transaction saved locally. It is available offline and marked as pending sync.',
+    );
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+
+    try {
+      const result = await syncPendingTransactions(transactions);
+      await saveTransactions(result.syncedTransactions);
+      setTransactions(result.syncedTransactions);
+      setSyncMessage(result.message);
+    } catch {
+      setSyncMessage('Sync failed. Your local transactions are still safe.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-stone-100">
       <StatusBar style="light" />
@@ -141,6 +227,140 @@ export default function App() {
               </Text>
             </View>
           </View>
+        </View>
+
+        <View className="gap-4 rounded-3xl bg-stone-50 p-5">
+          <View className="flex-row items-center justify-between">
+            <View className="gap-1">
+              <Text className="text-xl font-extrabold text-slate-900">
+                Add Transaction
+              </Text>
+              <Text className="text-[13px] text-slate-500">
+                Stored on-device first, then ready for sync.
+              </Text>
+            </View>
+            <Text className="rounded-full bg-stone-200 px-3 py-1 text-[12px] font-semibold text-slate-600">
+              30-day local cache
+            </Text>
+          </View>
+
+          <View className="flex-row gap-3">
+            {(['expense', 'income'] as TransactionType[]).map((type) => {
+              const selected = transactionType === type;
+
+              return (
+                <Pressable
+                  key={type}
+                  className={`flex-1 rounded-2xl px-4 py-3 ${
+                    selected ? 'bg-emerald-950' : 'bg-stone-200'
+                  }`}
+                  onPress={() => setTransactionType(type)}
+                >
+                  <Text
+                    className={`text-center text-sm font-bold capitalize ${
+                      selected ? 'text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    {type}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View className="gap-3">
+            <TextInput
+              className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
+              placeholder="Transaction title"
+              placeholderTextColor="#78716c"
+              value={title}
+              onChangeText={setTitle}
+            />
+            <TextInput
+              className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-slate-900"
+              placeholder="Amount"
+              placeholderTextColor="#78716c"
+              keyboardType="decimal-pad"
+              value={amount}
+              onChangeText={setAmount}
+            />
+          </View>
+
+          <View className="gap-3">
+            <Text className="text-sm font-semibold text-slate-600">
+              Category
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {getCategoriesByType(transactionType).map((item) => {
+                const selected = item === category;
+
+                return (
+                  <Pressable
+                    key={item}
+                    className={`rounded-full px-4 py-2 ${
+                      selected ? 'bg-orange-700' : 'bg-stone-200'
+                    }`}
+                    onPress={() => setCategory(item)}
+                  >
+                    <Text
+                      className={`text-sm font-semibold ${
+                        selected ? 'text-white' : 'text-slate-700'
+                      }`}
+                    >
+                      {item}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <Pressable
+            className="rounded-2xl bg-emerald-700 px-4 py-4"
+            onPress={() => {
+              void handleAddTransaction();
+            }}
+          >
+            <Text className="text-center text-base font-bold text-white">
+              Save Transaction Offline
+            </Text>
+          </Pressable>
+        </View>
+
+        <View className="gap-4 rounded-3xl bg-stone-50 p-5">
+          <View className="flex-row items-center justify-between">
+            <View className="gap-1">
+              <Text className="text-xl font-extrabold text-slate-900">
+                Sync Status
+              </Text>
+              <Text className="text-[13px] text-slate-500">
+                {isSupabaseConfigured()
+                  ? 'Supabase connection is configured.'
+                  : 'Supabase is not configured yet.'}
+              </Text>
+            </View>
+            <Text className="rounded-full bg-stone-200 px-3 py-1 text-[12px] font-semibold text-slate-600">
+              {pendingSyncCount} pending
+            </Text>
+          </View>
+
+          <Text className="text-sm leading-6 text-slate-600">
+            {syncMessage}
+          </Text>
+
+          <Pressable
+            className={`rounded-2xl px-4 py-4 ${
+              isSyncing ? 'bg-stone-300' : 'bg-slate-900'
+            }`}
+            disabled={isSyncing || isBootstrapping}
+            onPress={() => {
+              void handleManualSync();
+            }}
+          >
+            <Text className="text-center text-base font-bold text-white">
+              {isSyncing ? 'Syncing...' : 'Run Manual Sync'}
+            </Text>
+          </Pressable>
         </View>
 
         <View className="gap-4 rounded-3xl bg-stone-50 p-5">
@@ -210,18 +430,29 @@ export default function App() {
                     {transaction.title}
                   </Text>
                   <Text className="text-[13px] text-slate-500">
-                    {transaction.category} • {transaction.date}
+                    {transaction.category} • {formatTransactionDate(transaction.date)}
                   </Text>
                 </View>
 
-                <Text
-                  className={`text-[15px] font-extrabold ${
-                    isIncome ? 'text-emerald-700' : 'text-orange-700'
-                  }`}
-                >
-                  {isIncome ? '+' : '-'}
-                  {currencyFormatter.format(transaction.amount)}
-                </Text>
+                <View className="items-end gap-1">
+                  <Text
+                    className={`text-[15px] font-extrabold ${
+                      isIncome ? 'text-emerald-700' : 'text-orange-700'
+                    }`}
+                  >
+                    {isIncome ? '+' : '-'}
+                    {currencyFormatter.format(transaction.amount)}
+                  </Text>
+                  <Text
+                    className={`text-[12px] font-semibold ${
+                      transaction.syncStatus === 'synced'
+                        ? 'text-emerald-700'
+                        : 'text-amber-700'
+                    }`}
+                  >
+                    {transaction.syncStatus === 'synced' ? 'Synced' : 'Pending'}
+                  </Text>
+                </View>
               </View>
             );
           })}
