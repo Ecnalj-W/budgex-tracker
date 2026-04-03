@@ -1,6 +1,6 @@
 # Budgex Tracker
 
-A simple mobile app starter for tracking budget, income, and expenses using Expo React Native and TypeScript.
+A personal mobile budget and expense tracker project built with Expo React Native, TypeScript, and NativeWind, focused on simple expense logging and budget monitoring.
 
 ## Current Starter Features
 
@@ -8,12 +8,15 @@ A simple mobile app starter for tracking budget, income, and expenses using Expo
 - Balance, income, and expense summary cards
 - Budget overview by category
 - Recent transactions list with sample data
+- NativeWind and Tailwind CSS utility-based styling
 
 ## Tech Stack
 
 - Expo
 - React Native
 - TypeScript
+- NativeWind
+- Tailwind CSS
 
 ## Run The App
 
