@@ -32,12 +32,21 @@ type RecordsScreenProps = {
     type: TransactionType;
     dateKey: string;
   }) => Promise<boolean>;
+  onUpdateTransaction: (payload: {
+    id: string;
+    description: string;
+    amount: string;
+    remarks: string;
+    category: string;
+    type: TransactionType;
+  }) => Promise<boolean>;
   theme: AppTheme;
 };
 
 export function RecordsScreen({
   transactions,
   onAddTransaction,
+  onUpdateTransaction,
   theme,
 }: RecordsScreenProps) {
   const [selectedDateKey, setSelectedDateKey] = useState(getTodayDateKey());
@@ -47,6 +56,9 @@ export function RecordsScreen({
     useState<TransactionType>('expense');
   const [category, setCategory] = useState(getCategoriesByType('expense')[0]);
   const [remarks, setRemarks] = useState('');
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     setCategory(getCategoriesByType(transactionType)[0]);
@@ -66,6 +78,8 @@ export function RecordsScreen({
 
   const todayKey = getTodayDateKey();
   const isTodayView = selectedDateKey === todayKey;
+  const isEditing = editingTransactionId !== null;
+  const isFormEditable = isTodayView || isEditing;
   const ledgerEntries = buildLedgerEntries(transactions, 'daily');
   const dailyEntries = ledgerEntries.filter(
     (entry) => entry.dateKey === selectedDateKey,
@@ -90,6 +104,24 @@ export function RecordsScreen({
     .sort((left, right) => right.localeCompare(left))
     .slice(0, 8);
 
+  const resetForm = () => {
+    setDescription('');
+    setAmount('');
+    setRemarks('');
+    setTransactionType('expense');
+    setCategory(getCategoriesByType('expense')[0]);
+    setEditingTransactionId(null);
+  };
+
+  const startEditingEntry = (entry: (typeof dailyEntries)[number]) => {
+    setEditingTransactionId(entry.id);
+    setDescription(entry.description ?? '');
+    setAmount(String(entry.amount));
+    setRemarks(entry.remarks ?? '');
+    setTransactionType(entry.type);
+    setCategory(entry.category);
+  };
+
   const saveTodayEntry = async () => {
     if (!isTodayView) {
       Alert.alert(
@@ -99,19 +131,26 @@ export function RecordsScreen({
       return;
     }
 
-    const saved = await onAddTransaction({
-      description,
-      amount,
-      remarks,
-      category,
-      type: transactionType,
-      dateKey: selectedDateKey,
-    });
+    const saved = editingTransactionId
+      ? await onUpdateTransaction({
+          id: editingTransactionId,
+          description,
+          amount,
+          remarks,
+          category,
+          type: transactionType,
+        })
+      : await onAddTransaction({
+          description,
+          amount,
+          remarks,
+          category,
+          type: transactionType,
+          dateKey: selectedDateKey,
+        });
 
     if (saved) {
-      setDescription('');
-      setAmount('');
-      setRemarks('');
+      resetForm();
     }
   };
 
@@ -192,16 +231,20 @@ export function RecordsScreen({
           <View className="flex-row items-center justify-between">
             <View className="gap-1">
               <Text className={`text-xl font-extrabold ${theme.textPrimary}`}>
-                Add Daily Entry
+                {editingTransactionId ? 'Edit Daily Entry' : 'Add Daily Entry'}
               </Text>
               <Text className={`text-[13px] ${theme.textMuted}`}>
-                {isTodayView
-                  ? 'This entry will be saved under today’s records.'
+                {isEditing
+                  ? 'You are editing an existing record. Save when your changes are ready.'
+                  : isTodayView
+                  ? editingTransactionId
+                    ? 'Update the selected entry, then save it back into today’s records.'
+                    : 'This entry will be saved under today’s records.'
                   : 'Viewing an older day. Switch to Today to add a new entry.'}
               </Text>
             </View>
             <Text className={`rounded-full px-3 py-1 text-[12px] font-semibold ${theme.chipBg} ${theme.chipText}`}>
-              {isTodayView ? 'Today' : 'Read only'}
+              {isEditing ? 'Editing' : isTodayView ? 'Today' : 'Read only'}
             </Text>
           </View>
 
@@ -232,10 +275,10 @@ export function RecordsScreen({
           <View className="gap-3">
             <TextInput
               className={`rounded-2xl border px-4 py-3 text-base ${theme.inputBorder} ${theme.inputBg} ${theme.textPrimary}`}
-              placeholder="Description"
+              placeholder="Description (optional)"
               placeholderTextColor="#78716c"
               value={description}
-              editable={isTodayView}
+              editable={isFormEditable}
               onChangeText={setDescription}
             />
             <TextInput
@@ -244,7 +287,7 @@ export function RecordsScreen({
               placeholderTextColor="#78716c"
               keyboardType="decimal-pad"
               value={amount}
-              editable={isTodayView}
+              editable={isFormEditable}
               onChangeText={setAmount}
             />
             <TextInput
@@ -252,7 +295,7 @@ export function RecordsScreen({
               placeholder="Remarks"
               placeholderTextColor="#78716c"
               value={remarks}
-              editable={isTodayView}
+              editable={isFormEditable}
               onChangeText={setRemarks}
             />
           </View>
@@ -269,7 +312,11 @@ export function RecordsScreen({
                     className={`rounded-full px-4 py-2 ${
                       selected ? 'bg-orange-700' : theme.chipBg
                     }`}
-                    onPress={() => setCategory(item)}
+                    onPress={() => {
+                      if (isFormEditable) {
+                        setCategory(item);
+                      }
+                    }}
                   >
                     <Text
                       className={`text-sm font-semibold ${
@@ -286,17 +333,28 @@ export function RecordsScreen({
 
           <Pressable
             className={`rounded-2xl px-4 py-4 ${
-              isTodayView ? 'bg-emerald-700' : 'bg-stone-300'
+              isFormEditable ? 'bg-emerald-700' : 'bg-stone-300'
             }`}
-            disabled={!isTodayView}
+            disabled={!isFormEditable}
             onPress={() => {
               void saveTodayEntry();
             }}
           >
             <Text className="text-center text-base font-bold text-white">
-              Save To Today's Records
+              {editingTransactionId ? 'Update Today\'s Record' : 'Save To Today\'s Records'}
             </Text>
           </Pressable>
+
+          {editingTransactionId ? (
+            <Pressable
+              className={`rounded-2xl px-4 py-4 ${theme.chipBg}`}
+              onPress={resetForm}
+            >
+              <Text className={`text-center text-base font-bold ${theme.chipText}`}>
+                Cancel Editing
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View className={`gap-4 rounded-3xl p-5 ${theme.cardBg}`}>
@@ -308,10 +366,15 @@ export function RecordsScreen({
               {isTodayView ? 'Today' : formatDisplayDate(selectedDateKey)}
             </Text>
           </View>
+          <Text className={`text-[13px] leading-6 ${theme.textMuted}`}>
+            Tap any row to load it back into the form and edit it later.
+          </Text>
           <LedgerTable
             entries={dailyEntries}
             emptyMessage="No records for this day yet. When a new day begins, this view starts fresh at zero until new entries are added."
             theme={theme}
+            onSelectEntry={startEditingEntry}
+            selectedEntryId={editingTransactionId}
           />
         </View>
       </ScrollView>

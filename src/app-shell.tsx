@@ -28,7 +28,11 @@ import {
   loadTransactions,
   saveTransactions,
 } from './lib/transaction-storage';
-import { syncPendingTransactions } from './lib/supabase-sync';
+import {
+  fetchTransactionsForUser,
+  mergeTransactions,
+  syncPendingTransactions,
+} from './lib/supabase-sync';
 import { isSupabaseEnabled } from './lib/supabase-client';
 import { GeneralScreen } from './screens/general-screen';
 import { HomeScreen } from './screens/home-screen';
@@ -44,6 +48,31 @@ type RootTabParamList = {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const navigationRef = createNavigationContainerRef<RootTabParamList>();
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const { message, details, hint, code } = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+      code?: unknown;
+    };
+
+    const parts = [message, details, hint, code].filter(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0,
+    );
+
+    if (parts.length > 0) {
+      return parts.join(' ');
+    }
+  }
+
+  return fallback;
+};
 
 export function AppShell() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -75,11 +104,34 @@ export function AppShell() {
           isSupabaseEnabled ? getCurrentAccountProfile() : Promise.resolve(null),
         ]);
 
-      setAccountProfile(remoteProfile ?? storedProfile);
+      const nextProfile = remoteProfile ?? storedProfile;
+      setAccountProfile(nextProfile);
       setAppSettings(storedSettings);
 
-      if (storedTransactions.length > 0) {
-        setTransactions(storedTransactions);
+      let nextTransactions = storedTransactions;
+
+      if (nextProfile.userId && isSupabaseEnabled) {
+        try {
+          const remoteTransactions = await fetchTransactionsForUser(
+            nextProfile.userId,
+          );
+
+          if (remoteTransactions.length > 0 || storedTransactions.length > 0) {
+            nextTransactions = mergeTransactions(
+              storedTransactions,
+              remoteTransactions,
+            );
+            await saveTransactions(nextTransactions);
+          }
+        } catch {
+          setSyncMessage(
+            'We loaded your device data, but cloud records could not be refreshed right now.',
+          );
+        }
+      }
+
+      if (nextTransactions.length > 0) {
+        setTransactions(nextTransactions);
         setIsBootstrapping(false);
         return;
       }
@@ -121,16 +173,7 @@ export function AppShell() {
     type: TransactionType;
     dateKey: string;
   }) => {
-    const trimmedDescription = description.trim();
     const parsedAmount = Number(amount);
-
-    if (!trimmedDescription) {
-      Alert.alert(
-        'Missing description',
-        'Add a short description for this ledger entry.',
-      );
-      return false;
-    }
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       Alert.alert('Invalid amount', 'Enter a valid amount greater than zero.');
@@ -138,7 +181,8 @@ export function AppShell() {
     }
 
     const nextTransaction = createTransaction({
-      description: trimmedDescription,
+      userId: accountProfile.userId ?? null,
+      description,
       category,
       amount: parsedAmount,
       type,
@@ -156,8 +200,57 @@ export function AppShell() {
     return true;
   };
 
+  const handleUpdateTransaction = async ({
+    id,
+    description,
+    amount,
+    remarks,
+    category,
+    type,
+  }: {
+    id: string;
+    description: string;
+    amount: string;
+    remarks: string;
+    category: string;
+    type: TransactionType;
+  }) => {
+    const parsedAmount = Number(amount);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Invalid amount', 'Enter a valid amount greater than zero.');
+      return false;
+    }
+
+    const updatedAt = new Date().toISOString();
+    const nextTransactions = transactions.map((transaction) => {
+      if (transaction.id !== id) {
+        return transaction;
+      }
+
+      return {
+        ...transaction,
+        description: description.trim() || null,
+        amount: parsedAmount,
+        remarks: remarks.trim() || null,
+        category,
+        type,
+        userId: accountProfile.userId ?? transaction.userId ?? null,
+        syncStatus: 'pending' as const,
+        updatedAt,
+      };
+    });
+
+    await saveTransactions(nextTransactions);
+    setTransactions(nextTransactions);
+    setSyncMessage(
+      'Transaction updated locally. It will sync again the next time you back up online.',
+    );
+    return true;
+  };
+
   const handleManualSync = async (source: 'manual' | 'auto' = 'manual') => {
-    if (!isSignedIn) {
+    if (!isSignedIn || !accountProfile.userId) {
       setSyncMessage(
         'Your records are still saved locally. Sign in first when you want to back them up online.',
       );
@@ -172,12 +265,37 @@ export function AppShell() {
     setIsSyncing(true);
 
     try {
-      const result = await syncPendingTransactions(transactions);
-      await saveTransactions(result.syncedTransactions);
-      setTransactions(result.syncedTransactions);
-      setSyncMessage(result.message);
-    } catch {
-      setSyncMessage('Sync failed. Your local transactions are still safe.');
+      const result = await syncPendingTransactions(
+        transactions,
+        accountProfile.userId,
+      );
+      const remoteTransactions = await fetchTransactionsForUser(
+        accountProfile.userId,
+      );
+      const mergedTransactions = mergeTransactions(
+        result.syncedTransactions,
+        remoteTransactions,
+      );
+
+      await saveTransactions(mergedTransactions);
+      setTransactions(mergedTransactions);
+
+      const importedCount = Math.max(
+        mergedTransactions.length - result.syncedTransactions.length,
+        0,
+      );
+
+      setSyncMessage(
+        importedCount > 0
+          ? `${result.message} Loaded ${importedCount} more cloud transaction(s) from your account.`
+          : result.message,
+      );
+    } catch (error) {
+      const message = getErrorMessage(
+        error,
+        'Sync failed. Your local transactions are still safe.',
+      );
+      setSyncMessage(message);
     } finally {
       setIsSyncing(false);
     }
@@ -195,15 +313,16 @@ export function AppShell() {
     password: string;
   }) => {
     if (!isSupabaseEnabled) {
-      setSyncMessage(
-        'Supabase auth is not configured yet. Add your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY first.',
-      );
-      return;
+      const message =
+        'Supabase auth is not configured yet. Add your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY first.';
+      setSyncMessage(message);
+      return { success: false, message };
     }
 
     if (!email.trim() || !password.trim()) {
-      setSyncMessage('Email and password are required for account access.');
-      return;
+      const message = 'Email and password are required for account access.';
+      setSyncMessage(message);
+      return { success: false, message };
     }
 
     try {
@@ -221,35 +340,76 @@ export function AppShell() {
 
       await saveAccountProfile(nextProfile);
       setAccountProfile(nextProfile);
-      setSyncMessage(
+
+      let nextMessage =
         mode === 'register'
           ? 'Account registered with Supabase and saved on this device.'
-          : 'Logged in with Supabase successfully.',
-      );
+          : 'Logged in with Supabase successfully.';
+
+      if (nextProfile.userId) {
+        const remoteTransactions = await fetchTransactionsForUser(
+          nextProfile.userId,
+        );
+        const mergedTransactions = mergeTransactions(
+          transactions,
+          remoteTransactions,
+        );
+
+        await saveTransactions(mergedTransactions);
+        setTransactions(mergedTransactions);
+
+        if (remoteTransactions.length > 0) {
+          nextMessage = `${nextMessage} Loaded ${remoteTransactions.length} cloud transaction(s) tied to your account.`;
+        }
+      }
+
+      setSyncMessage(nextMessage);
+      return { success: true, message: nextMessage };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Authentication failed.';
+      const message = getErrorMessage(error, 'Authentication failed.');
       setSyncMessage(message);
+      return { success: false, message };
     }
   };
 
   const handleGoogleAuth = async () => {
     if (!isSupabaseEnabled) {
-      setSyncMessage(
-        'Supabase auth is not configured yet. Add your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY first.',
-      );
-      return;
+      const message =
+        'Supabase auth is not configured yet. Add your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY first.';
+      setSyncMessage(message);
+      return { success: false, message };
     }
 
     try {
       const nextProfile = await loginWithGoogle();
       await saveAccountProfile(nextProfile);
       setAccountProfile(nextProfile);
-      setSyncMessage('Logged in with Google via Supabase successfully.');
+
+      let nextMessage = 'Logged in with Google via Supabase successfully.';
+
+      if (nextProfile.userId) {
+        const remoteTransactions = await fetchTransactionsForUser(
+          nextProfile.userId,
+        );
+        const mergedTransactions = mergeTransactions(
+          transactions,
+          remoteTransactions,
+        );
+
+        await saveTransactions(mergedTransactions);
+        setTransactions(mergedTransactions);
+
+        if (remoteTransactions.length > 0) {
+          nextMessage = `${nextMessage} Loaded ${remoteTransactions.length} cloud transaction(s) tied to your account.`;
+        }
+      }
+
+      setSyncMessage(nextMessage);
+      return { success: true, message: nextMessage };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Google login failed.';
+      const message = getErrorMessage(error, 'Google login failed.');
       setSyncMessage(message);
+      return { success: false, message };
     }
   };
 
@@ -268,7 +428,7 @@ export function AppShell() {
       setAccountProfile(clearedProfile);
       setSyncMessage('Signed out from this device.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Sign out failed.';
+      const message = getErrorMessage(error, 'Sign out failed.');
       setSyncMessage(message);
     }
   };
@@ -338,6 +498,7 @@ export function AppShell() {
               transactions={transactions}
               theme={theme}
               onAddTransaction={handleAddTransaction}
+              onUpdateTransaction={handleUpdateTransaction}
             />
           )}
         </Tab.Screen>
@@ -348,10 +509,10 @@ export function AppShell() {
               appSettings={appSettings}
               theme={theme}
               onAuthSubmit={({ mode, displayName, email, password }) => {
-                void handleAuthSubmit({ mode, displayName, email, password });
+                return handleAuthSubmit({ mode, displayName, email, password });
               }}
               onGoogleAuth={() => {
-                void handleGoogleAuth();
+                return handleGoogleAuth();
               }}
               onSignOut={() => {
                 void handleSignOut();

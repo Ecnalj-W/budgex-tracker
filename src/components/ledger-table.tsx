@@ -1,4 +1,4 @@
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { formatLedgerDate } from '../lib/date-utils';
 import { currencyFormatter } from '../lib/ledger';
@@ -10,9 +10,17 @@ type LedgerTableProps = {
   entries: LedgerEntry[];
   emptyMessage: string;
   theme: AppTheme;
+  onSelectEntry?: (entry: LedgerEntry) => void;
+  selectedEntryId?: string | null;
 };
 
-export function LedgerTable({ entries, emptyMessage, theme }: LedgerTableProps) {
+export function LedgerTable({
+  entries,
+  emptyMessage,
+  theme,
+  onSelectEntry,
+  selectedEntryId,
+}: LedgerTableProps) {
   if (entries.length === 0) {
     return (
       <View className={`rounded-2xl border border-dashed px-4 py-8 ${theme.inputBorder} ${theme.cardAltBg}`}>
@@ -45,17 +53,24 @@ export function LedgerTable({ entries, emptyMessage, theme }: LedgerTableProps) 
           </Text>
         </View>
 
-        {entries.map((entry) => (
-          <View
+        {entries.map((entry) => {
+          const isSelectable = Boolean(onSelectEntry);
+          const isSelected = selectedEntryId === entry.id;
+          const rowClasses = isSelected
+            ? 'bg-emerald-50'
+            : '';
+
+          const content = (
+            <View
             key={entry.id}
-            className={`flex-row border-b px-3 py-3 last:border-b-0 ${theme.border}`}
+            className={`flex-row border-b px-3 py-3 last:border-b-0 ${theme.border} ${rowClasses}`}
           >
             <Text className={`w-[72px] text-[12px] font-semibold ${theme.textMuted}`}>
               {formatLedgerDate(entry.date)}
             </Text>
             <View className="w-[170px] pr-3">
               <Text className={`text-[13px] font-bold ${theme.textSecondary}`}>
-                {entry.description}
+                {entry.description?.trim() || 'No description'}
               </Text>
               <Text className={`text-[11px] ${theme.textMuted}`}>{entry.category}</Text>
             </View>
@@ -72,7 +87,18 @@ export function LedgerTable({ entries, emptyMessage, theme }: LedgerTableProps) 
               {entry.ledgerRemarks}
             </Text>
           </View>
-        ))}
+          );
+
+          if (!isSelectable) {
+            return content;
+          }
+
+          return (
+            <Pressable key={entry.id} onPress={() => onSelectEntry?.(entry)}>
+              {content}
+            </Pressable>
+          );
+        })}
       </View>
     </ScrollView>
   );

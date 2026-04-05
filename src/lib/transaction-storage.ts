@@ -48,6 +48,7 @@ const createId = () =>
   `txn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const createTransaction = ({
+  userId,
   description,
   category,
   amount,
@@ -55,7 +56,8 @@ export const createTransaction = ({
   date,
   remarks,
 }: {
-  description: string;
+  userId?: string | null;
+  description?: string | null;
   category: string;
   amount: number;
   type: TransactionType;
@@ -68,7 +70,8 @@ export const createTransaction = ({
 
   return {
     id: createId(),
-    description: description.trim(),
+    userId: userId ?? null,
+    description: description?.trim() || null,
     category,
     amount,
     type,

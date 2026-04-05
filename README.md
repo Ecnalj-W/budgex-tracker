@@ -13,9 +13,9 @@ A personal mobile budget and expense tracker project built with Expo React Nativ
 - Passbook-style ledger records with withdrawal, deposit, balance, and remarks
 - Offline-first transaction storage using AsyncStorage
 - NativeWind and Tailwind CSS utility-based styling
-- Supabase-ready sync layer for pending local transactions
+- Supabase-ready sync layer for pending local transactions with per-user cloud records
 - Local account profile and settings storage ready for multi-user expansion
-- Supabase email auth and Google OAuth code paths are wired into the General tab
+- Supabase email auth is wired into the General tab, with offline-first usage still supported
 
 ## Tech Stack
 
@@ -63,6 +63,7 @@ npm start
 - New items are marked as `pending` until they are synced online
 - Manual sync is already wired into the app
 - Supabase can be enabled later by filling in [src/config/supabase.ts](J:\GITHUB\budgex-tracker\src\config\supabase.ts)
+- When signed in, cloud sync now writes transactions with the authenticated `user_id` and only reads that user’s records back
 
 ## Account And Settings
 
@@ -84,11 +85,11 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 The app now reads Supabase auth credentials from environment variables through [src/config/supabase.ts](J:\GITHUB\budgex-tracker\src\config\supabase.ts).
 
-Before testing auth, configure:
+Before testing auth and cloud sync, configure:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- Google provider in Supabase Auth
+- Email provider in Supabase Auth
 - redirect URI for the custom app scheme `budgex://auth/callback`
 - the `profiles` and `transactions` tables
 
@@ -113,6 +114,7 @@ Suggested table columns:
 
 ```sql
 id text primary key,
+user_id uuid references auth.users(id) on delete cascade,
 description text not null,
 category text not null,
 amount numeric not null,

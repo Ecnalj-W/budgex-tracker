@@ -21,8 +21,8 @@ type GeneralScreenProps = {
     displayName: string;
     email: string;
     password: string;
-  }) => void;
-  onGoogleAuth: () => void;
+  }) => Promise<{ success: boolean; message: string }>;
+  onGoogleAuth: () => Promise<{ success: boolean; message: string }>;
   onSignOut: () => void;
   onToggleSetting: (field: keyof AppSettings) => void;
   theme: AppTheme;
@@ -42,28 +42,41 @@ export function GeneralScreen({
   const [displayName, setDisplayName] = useState(accountProfile.displayName);
   const [email, setEmail] = useState(accountProfile.email);
   const [password, setPassword] = useState('');
+  const [authFeedback, setAuthFeedback] = useState('');
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
   const openAuthModal = (mode: 'login' | 'register') => {
     setAuthMode(mode);
     setDisplayName(accountProfile.displayName);
     setEmail(accountProfile.email);
     setPassword('');
+    setAuthFeedback('');
     setIsAuthModalVisible(true);
   };
 
   const closeAuthModal = () => {
     setIsAuthModalVisible(false);
     setPassword('');
+    setAuthFeedback('');
   };
 
-  const submitAuth = () => {
-    onAuthSubmit({
+  const submitAuth = async () => {
+    setIsSubmittingAuth(true);
+    setAuthFeedback('');
+
+    const result = await onAuthSubmit({
       mode: authMode,
       displayName,
       email,
       password,
     });
-    closeAuthModal();
+
+    setIsSubmittingAuth(false);
+    setAuthFeedback(result.message);
+
+    if (result.success) {
+      closeAuthModal();
+    }
   };
 
   return (
@@ -284,12 +297,25 @@ export function GeneralScreen({
               />
             </View>
 
+            {authFeedback ? (
+              <View className={`mt-4 rounded-2xl px-4 py-3 ${theme.cardAltBg}`}>
+                <Text className={`text-sm leading-6 ${theme.textMuted}`}>
+                  {authFeedback}
+                </Text>
+              </View>
+            ) : null}
+
             <Pressable
               className="mt-4 rounded-2xl bg-emerald-700 px-4 py-4"
+              disabled={isSubmittingAuth}
               onPress={submitAuth}
             >
               <Text className="text-center text-base font-bold text-white">
-                {authMode === 'register' ? 'Create Account' : 'Login'}
+                {isSubmittingAuth
+                  ? 'Please wait...'
+                  : authMode === 'register'
+                    ? 'Create Account'
+                    : 'Login'}
               </Text>
             </Pressable>
 
@@ -303,9 +329,17 @@ export function GeneralScreen({
 
             <Pressable
               className={`mt-4 flex-row items-center justify-center gap-3 rounded-2xl border px-4 py-4 ${theme.inputBorder} ${theme.cardAltBg}`}
-              onPress={() => {
-                onGoogleAuth();
-                closeAuthModal();
+              disabled={isSubmittingAuth}
+              onPress={async () => {
+                setIsSubmittingAuth(true);
+                setAuthFeedback('');
+                const result = await onGoogleAuth();
+                setIsSubmittingAuth(false);
+                setAuthFeedback(result.message);
+
+                if (result.success) {
+                  closeAuthModal();
+                }
               }}
             >
               <Ionicons name="logo-google" size={20} color="#ea4335" />

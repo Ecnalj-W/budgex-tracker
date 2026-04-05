@@ -111,6 +111,12 @@ export const registerWithEmail = async ({
     throw new Error('Registration did not return a user.');
   }
 
+  if (!data.session) {
+    throw new Error(
+      'Registration created your account, but Supabase email confirmation is still enabled. Confirm your email first, or turn off Confirm email in Supabase while testing.',
+    );
+  }
+
   const profile = buildProfile({
     ...data.user,
     user_metadata: {

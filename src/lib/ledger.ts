@@ -35,6 +35,7 @@ export const buildLedgerEntries = (
 
     return {
       ...transaction,
+      description: transaction.description?.trim() || null,
       dateKey,
       deposit,
       withdrawal,
